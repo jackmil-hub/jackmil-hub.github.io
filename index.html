@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Notes Dashboard</title>
+    <script src="https://tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .chat-box { height: calc(100vh - 180px); }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between min-h-screen p-4">
+    <div class="w-full max-w-3xl bg-slate-800 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-700">
+        <!-- Disguised Header -->
+        <div class="bg-slate-900 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h1 class="text-lg font-semibold tracking-wide text-slate-300">Workspace / Draft Archive</h1>
+            <div class="flex items-center space-x-2">
+                <input type="password" id="apiKeyInput" placeholder="Enter OpenRouter Free Key..." class="bg-slate-950 border border-slate-700 rounded px-3 py-1 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+            </div>
+        </div>
+        
+        <!-- Conversation Area -->
+        <div id="chatWindow" class="chat-box p-6 overflow-y-auto space-y-4 flex flex-col">
+            <div class="bg-slate-700/40 p-4 rounded-lg max-w-[85%] border border-slate-600/50 self-start">
+                System initialised. Enter your free OpenRouter token in the top right to chat.
+            </div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="p-4 bg-slate-900 border-t border-slate-700 flex space-x-3">
+            <textarea id="userInput" rows="1" placeholder="Type a message..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:border-indigo-500"></textarea>
+            <button id="sendBtn" class="bg-indigo-600 hover:bg-indigo-500 transition px-6 py-2 rounded-lg font-medium text-white shadow-lg active:scale-95">Submit</button>
+        </div>
+    </div>
+
+    <script>
+        const chatWindow = document.getElementById('chatWindow');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+
+        if (localStorage.getItem('free_token')) {
+            apiKeyInput.value = localStorage.getItem('free_token');
+        }
+
+        function appendMessage(text, isUser) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = isUser 
+                ? "bg-indigo-600 text-white p-4 rounded-lg max-w-[85%] self-end shadow-md whitespace-pre-wrap"
+                : "bg-slate-700 text-slate-100 p-4 rounded-lg max-w-[85%] self-start shadow-md whitespace-pre-wrap border border-slate-600";
+            msgDiv.textContent = text;
+            chatWindow.appendChild(msgDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        async function handleSend() {
+            const query = userInput.value.trim();
+            const apiKey = apiKeyInput.value.trim();
+            
+            if (!query) return;
+            if (!apiKey) {
+                alert("Please input your Free OpenRouter Key first.");
+                return;
+            }
+
+            localStorage.setItem('free_token', apiKey);
+            appendMessage(query, true);
+            userInput.value = '';
+
+            const loadingBubble = document.createElement('div');
+            loadingBubble.className = "bg-slate-700 text-slate-400 p-4 rounded-lg max-w-[85%] self-start animate-pulse";
+            loadingBubble.textContent = "Querying free data stream...";
+            chatWindow.appendChild(loadingBubble);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+
+            try {
+                // Pointing safely to OpenRouter's free network structure
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "deepseek/deepseek-v4-flash:free", // Absolute newest DeepSeek model on the free line
+                        messages: [{ role: "user", content: query }]
+                    })
+                });
+
+                const data = await response.json();
+                chatWindow.removeChild(loadingBubble);
+
+                if (data.choices && data.choices[0]) {
+                    appendMessage(data.choices[0].message.content, false);
+                } else {
+                    appendMessage("Error: Free tier model busy or invalid key settings.", false);
+                }
+            } catch (error) {
+                chatWindow.removeChild(loadingBubble);
+                appendMessage("Connection Refused. Firewalls or browser blocks may be intercepting API.", false);
+            }
+        }
+
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    </script>
+</body>
+</html>
